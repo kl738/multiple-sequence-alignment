@@ -23,6 +23,20 @@ import numpy as np
 import itertools
 
 '''
+Config class for heuristics
+'''
+class Config:
+    def __init__(self, scores_path, d, e, seq_weighting, init_gap_penalties, pos_gap_penalties, weight_m, divergent_seq):
+        self.scores_path = scores_path
+        self.d = d
+        self.e = e
+        self.seq_weighting = seq_weighting 
+        self.init_gap_penalties = init_gap_penalties
+        self.pos_gap_penalties = pos_gap_penalties
+        self.weight_m = weight_m
+        self.divergent_seq = divergent_seq
+
+'''
 Pairwise sequence alignment from HW2 to determine scores and thus distances.
 Used in computing distance matrix.
 '''
@@ -261,17 +275,26 @@ def main():
     parser = argparse.ArgumentParser(
         description='Calculate sequence alignments for two sequences with a linear gap penalty.')
     parser.add_argument('-f', action="store", dest="f", type=str, required=True)
-    parser.add_argument('-s', action="store", dest="s", type=str, required=True)
-    parser.add_argument('-d', action="store", dest="d", type=float, required=True)
+    parser.add_argument('-c', action="store", dest="c", type=str, required=True)
 
     args = parser.parse_args()
     fasta_file = args.f
-    score_matrix_file = args.s
-    d = args.d
+    config_file = args.c
 
     with open(fasta_file) as f:
         sequences = [line.strip() for line in f.readlines()]
 
+    with open(config_file) as f:
+        lines = [line.strip() for line in f.readlines()]
+        scores_path = lines[0]
+        d = lines[1]
+        e = lines[2]
+        seq_weighting = lines[3]
+        init_gap_penalties = lines[4]
+        pos_gap_penalties = lines[5]
+        weight_m = lines[6]
+        divergent_seq = lines[7]
+        config = Config(scores_path,d,e,seq_weighting,init_gap_penalties,pos_gap_penalties,weight_m,divergent_seq)
     with open(score_matrix_file) as f:
         s = json.loads(f.readlines()[0])
    
