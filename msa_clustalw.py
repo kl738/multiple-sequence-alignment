@@ -21,130 +21,14 @@ import argparse
 import json
 import numpy as np
 import itertools
-
-'''
-Config class for heuristics
-'''
-class Config:
-    def __init__(self, scores_path, d, e, seq_weighting, init_gap_penalties, pos_gap_penalties, weight_m, divergent_seq):
-        self.scores_path = scores_path
-        self.d = d
-        self.e = e
-        self.seq_weighting = seq_weighting 
-        self.init_gap_penalties = init_gap_penalties
-        self.pos_gap_penalties = pos_gap_penalties
-        self.weight_m = weight_m
-        self.divergent_seq = divergent_seq
-
-'''
-Pairwise sequence alignment from HW2 to determine scores and thus distances.
-Used in computing distance matrix.
-'''
-def compute_distance(x, y, s, d):
-     # init matrices
-    m = [[0] * (len(y)+1) for _ in range(len(x)+1)]
-    # base cases
-    for i in range(1,len(x)+1):
-        m[i][0] = m[i-1][0]-d
-    for j in range(1,len(y)+1):
-        m[0][j] = m[0][j-1]-d
-    # recursive step
-    for i in range(1,len(x)+1):
-        for j in range(1,len(y)+1):
-            vg = m[i-1][j-1] + s[x[i-1]][y[j-1]]
-            vu = m[i-1][j] - d
-            vl = m[i][j-1] - d
-            m[i][j] = max(vg,vu,vl)
-    return m[len(x)][len(y)]
-
-'''
-Computes all pairwise distances between sequences using Needlemen-Wunsch.
-Returns a distance matrix in the form of dict of dicts.
-'''
-def compute_distances(sequences,s,d):
-    n = len(sequences)
-    m = np.ndarray((n,n),np.float)
-    for i in range(n):
-        for j in range(n):
-            m[i][j] = compute_distance(sequences[i], sequences[j],s,d)
-    d = {}
-    for i in range(n):
-        temp = {}
-        for j in range(len(m[i])):
-            temp[j] = m[i][j]
-        d[i] = temp
-    return d
-
-'''
-Builds tree nodes with neighbor-joining, returns nodes and root
-'''
-def build_tree(D):
-    # nodes is the dict of nodes of the tree, z is the id of the new nodes to create >=n
-    nodes = {}
-    z = len(D)
-    def process(z):
-        n = len(D)
-        # getting row and column sums
-        rowsl = {}
-        colsl = {}
-        for i in D:
-            for j in D[i]:
-                if rowsl.get(i)==None:
-                    rowsl[i] = D[i][j]
-                else:
-                    rowsl[i]+=D[i][j]
-                if colsl.get(j)==None:
-                    colsl[j] = D[i][j]
-                else:
-                    colsl[j]+=D[i][j]
-        minv = 1e9
-        argmin_i, argmin_j = 0,0
-        dij = {i:{} for i in D}
-        # creating D*, and fetching min value
-        for i in D:
-            for j in D[i]:
-                if i == j:
-                    dij[i][j] = 0
-                else:
-                    dij[i][j] = (n-2)*D[i][j] - rowsl[i] - colsl[j]
-                    if dij[i][j] < minv:
-                        minv = dij[i][j]
-                        argmin_i = i 
-                        argmin_j = j
-        # adding edge to nodes
-        left_l = .5*(D[argmin_i][argmin_j]+(rowsl[argmin_i]-colsl[argmin_j])/(n-2))
-        right_l = .5*(D[argmin_i][argmin_j]+(colsl[argmin_j]-rowsl[argmin_i])/(n-2))
-        nodes[z] = []
-        nodes[z].append((argmin_i,left_l))
-        nodes[z].append((argmin_j,right_l))
-        # inserting new row and column
-        temp = {}
-        for k in D:
-            temp[k] = (D[argmin_i][k]+D[argmin_j][k]-D[argmin_i][argmin_j])/2
-            D[k][z] = (D[argmin_i][k]+D[argmin_j][k]-D[argmin_i][argmin_j])/2
-        temp[z] = 0
-        D[z] = temp
-        # deleting rows
-        D.pop(argmin_i,None)
-        D.pop(argmin_j,None)
-        # deleting columns
-        for i,v in D.items():
-            D[i].pop(argmin_i,None)
-            D[i].pop(argmin_j,None)   
-    while len(D) > 2:
-        process(z)
-        z += 1
-    # add last two
-    i,j = D.keys()
-    length = D[i][j]
-    nodes[z] = [(i,length/2),(j,length/2)]
-    return nodes, z
+import configuration
+import tree_builder
 
 '''
 a1 and a2 are lists of sequences and t is the traceback matrix.
 Returns the list of joined sequences that are all aligned together.
 '''
-def traceback(a1, a2, t):
+def traceback(a1, a2, t, start):
     a1_length = len(a1)
     a2_length = len(a2)
     a1_acc = [[] for _ in range(a1_length)]
@@ -152,8 +36,9 @@ def traceback(a1, a2, t):
     i = len(a1[0])
     j = len(a2[0])
     while i > 0 or j > 0:
+        direction, table = t[i][j][start]
         # move diagonal
-        if t[i][j] == 'g':
+        if direction == 'g':
             for k in range(a1_length):
                 a1_acc[k].append(a1[k][i-1])
             for l in range(a2_length):
@@ -161,19 +46,20 @@ def traceback(a1, a2, t):
             i -= 1
             j -= 1
         # move left
-        elif t[i][j] == 'l':
+        elif direction == 'l':
             for k in range(a1_length):
                 a1_acc[k].append('-')
             for l in range(a2_length):
                 a2_acc[l].append(a2[l][j-1])
             j -= 1
         # move up
-        elif t[i][j] == 'u':
+        elif direction == 'u':
             for k in range(a1_length):
                 a1_acc[k].append(a1[k][i-1])
             for l in range(a2_length):
                 a2_acc[l].append('-')
             i -= 1
+        start = table
     ret = []
     for a in a1_acc:
         ret.append(''.join(reversed(a)))
@@ -187,19 +73,34 @@ Uses slightly modified pairwise alignment that average scores of a1 and a2
 at each recursive step. If gaps are inserted, then they will be inserted
 across the entire column within the alignment.
 '''
-def align(a1,a2,s,d):
+def align(a1,a2,s,d,e):
     length_a1 = len(a1[0])
     length_a2 = len(a2[0])
     # init matrices
     m = [[0] * (length_a2+1) for _ in range(length_a1+1)]
-    t = [[''] * (length_a2+1) for _ in range(length_a1+1)]
+    i_x = [[0] * (length_a2+1) for _ in range(length_a1+1)]
+    i_y = [[0] * (length_a2+1) for _ in range(length_a1+1)]
+    t = []
+    for i in range(length_a1+1):
+        temp = []
+        for j in range(length_a2+1):
+            temp.append([['',0],['',0],['',0]])
+        t.append(temp)    
     # base cases
     for i in range(1,length_a1+1):
         m[i][0] = m[i-1][0]-d
-        t[i][0] = 'u'
+        i_x[i][0] = i_x[i-1][0]-e
+        i_y[i][0] = -1e10
+        t[i][0][0] = ['u', 1]
+        t[i][0][1] = ['u', 1]
+        t[i][0][2] = ['u', 1]
     for j in range(1,length_a2+1):
         m[0][j] = m[0][j-1]-d
-        t[0][j] = 'l'
+        i_x[0][j] = -1e10
+        i_y[0][j] = i_y[0][j-1]-e
+        t[0][j][0] = ['l', 2]
+        t[0][j][1] = ['l', 2]
+        t[0][j][2] = ['l', 2]
     # recursive step
     for i in range(1,length_a1+1):
         for j in range(1,length_a2+1):
@@ -212,34 +113,56 @@ def align(a1,a2,s,d):
                     else:
                         score += s[x[i-1]][y[j-1]]
                     count += 1
-            vg = m[i-1][j-1] + score/float(count)
-            vu = m[i-1][j] - d
-            vl = m[i][j-1] - d
-            m[i][j] = max(vg,vu,vl)
-            if m[i][j] == vg:
-                t[i][j] = 'g'
-            elif m[i][j] == vu:
-                t[i][j] = 'u'
-            elif m[i][j] == vl:
-                t[i][j] = 'l'
-    aligned = traceback(a1,a2,t)
+            avg_score = score/float(count)
+            m_m = m[i-1][j-1] + avg_score
+            m_ix = i_x[i-1][j-1] + avg_score
+            m_iy = i_y[i-1][j-1] + avg_score
+            m[i][j] = max(m_m,m_ix,m_iy)
+            if m[i][j] == m_m:
+                t[i][j][0] = ['g', 0]
+            elif m[i][j] == m_ix:
+                t[i][j][0] = ['g', 1]
+            elif m[i][j] == m_iy:
+                t[i][j][0] = ['g', 2]
+            ix_m = m[i-1][j] - d
+            ix_ix = i_x[i-1][j] - e
+            i_x[i][j] = max(ix_m,ix_ix)
+            if i_x[i][j] == ix_m:
+                t[i][j][1] = ['u', 0]
+            elif i_x[i][j] == ix_ix:
+                t[i][j][1] = ['u', 1]
+            iy_m = m[i][j-1] - d
+            iy_iy = i_y[i][j-1] - e
+            i_y[i][j] = max(iy_m,iy_iy)
+            if i_y[i][j] == iy_m:
+                t[i][j][2] = ['l', 0]
+            elif i_y[i][j] == iy_iy:
+                t[i][j][2] = ['l', 2]
+    max_score = max(m[len(x)][len(y)],i_x[len(x)][len(y)],i_y[len(x)][len(y)])
+    if max_score == m[len(x)][len(y)]:
+        start = 0
+    elif max_score == i_x[len(x)][len(y)]:
+        start = 1
+    elif max_score == i_y[len(x)][len(y)]:
+        start = 2
+    aligned = traceback(a1,a2,t,start)
     return aligned
 
 '''
 Uses postorder traversal to align the nodes
 '''
-def postorder_align(sequences, nodes, root, mapping, s, d):
+def postorder_align(sequences, nodes, root, mapping, s, d, e):
     def postorder(n):
         lnode,ldist = nodes[n][0]
         rnode,rdist = nodes[n][1]
         if lnode in mapping and rnode in mapping:
-            return align([sequences[lnode]],[sequences[rnode]],s,d)
+            return align([sequences[lnode]],[sequences[rnode]],s,d,e)
         elif lnode in mapping and rnode not in mapping:
-            return align([sequences[lnode]],postorder(rnode),s,d)
+            return align([sequences[lnode]],postorder(rnode),s,d,e)
         elif lnode not in mapping and rnode in mapping:
-            return align(postorder(lnode), [sequences[rnode]],s,d)
+            return align(postorder(lnode), [sequences[rnode]],s,d,e)
         elif lnode not in mapping and rnode not in mapping:
-            return align(postorder(lnode),postorder(rnode),s,d)
+            return align(postorder(lnode),postorder(rnode),s,d,e)
     aligned = postorder(root)
     return aligned
 
@@ -247,21 +170,19 @@ def postorder_align(sequences, nodes, root, mapping, s, d):
 Computes the score and alignment of sequences.
 Arguments:
     sequences: list of sequences to align
-    scores: the score matrix
-    d: the gap opening/extension penalty
+    config: config
 Returns:
     score: the score of the optimal sequence alignment
     aligned: list of aligned sequences
 '''
-def sequence_alignment(sequences, scores, d):
+def sequence_alignment(sequences, config):
     #compute distances
-    D = compute_distances(sequences, scores, d)
+    D = tree_builder.compute_distances(sequences, config.scores['BLOSUM62'], config.d, config.e)
     #compute guide_tree
-    nodes, root = build_tree(D)
-    # print(nodes,root)
+    nodes, root = tree_builder.build_tree(D)
     #postorder traversal
     mapping = dict(enumerate(sequences))
-    aligned = postorder_align(sequences, nodes, root, mapping, scores, d)
+    aligned = postorder_align(sequences, nodes, root, mapping, config.scores['BLOSUM62'], config.d, config.e)
     return aligned 
 
 '''
@@ -283,25 +204,11 @@ def main():
 
     with open(fasta_file) as f:
         sequences = [line.strip() for line in f.readlines()]
-
-    with open(config_file) as f:
-        lines = [line.strip() for line in f.readlines()]
-        scores_path = lines[0]
-        d = lines[1]
-        e = lines[2]
-        seq_weighting = lines[3]
-        init_gap_penalties = lines[4]
-        pos_gap_penalties = lines[5]
-        weight_m = lines[6]
-        divergent_seq = lines[7]
-        config = Config(scores_path,d,e,seq_weighting,init_gap_penalties,pos_gap_penalties,weight_m,divergent_seq)
-    with open(score_matrix_file) as f:
-        s = json.loads(f.readlines()[0])
-   
-    aligned = sequence_alignment(sequences, s, d)
+    
+    config = configuration.parseConfigFile(config_file)
+    aligned = sequence_alignment(sequences, config)
     print "Alignment:"
     print_alignment(aligned)
-    # print "Score: " + str(score)
 
 if __name__ == "__main__":
     main()
