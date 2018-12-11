@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
 '''
-Alignment and score at the bottom of this comment.
-
 Script for computing sequence alignments using multidimensional dynamic
     programming.
 Arguments:
@@ -14,7 +12,7 @@ Outputs:
     Prints alignment to console.
 
 Example Usage:
-    python msa_dp.py -f sequences.fasta -s score_matrix.json -d 100
+    python msa_dp.py -f sequences.fasta -s matrices/score_matrix.json -d 100
 '''
 
 import argparse

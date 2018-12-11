@@ -1,5 +1,18 @@
-import json
+'''
+Provides helper class and methods for parsing configuration file.
 
+Format Required(line by line in order):
+    - BLOSUM json directory(str)
+    - gap opening penalty(int)
+    - gap extension penalty(int)
+    - use sequence weighting(1/0)
+    - modify initial gap penalties(1/0)
+    - use position specific gap penalties(1/0)
+    - use different weight matrices(1/0)
+    - account for divergent sequences(1/0)
+'''
+
+import json
 '''
 Config class for heuristics
 '''
@@ -14,6 +27,9 @@ class Config:
         self.weight_m = weight_m
         self.divergent_seq = divergent_seq
 
+'''
+Parses configuration file into Config object
+'''
 def parseConfigFile(config_file):
     with open(config_file) as f:
         lines = [line.strip() for line in f.readlines()]

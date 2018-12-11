@@ -1,3 +1,3 @@
-sequences = ['a','b','c']
-d = dict(enumerate(sequences))
-print(d)
+hello = 1
+if hello:
+    print "Hi"

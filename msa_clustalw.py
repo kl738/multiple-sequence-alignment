@@ -3,18 +3,16 @@
 '''
 Alignment and score at the bottom of this comment.
 
-Script for computing sequence alignments using multidimensional dynamic
-    programming.
+Script for computing sequence alignments using CLUSTALW
 Arguments:
     f - FASTA file with sequences in FASTA format.
-    s - JSON with the score matrix for alignment.
-    d - The gap penalty for the alignment.
-
+    c - configuration file path
+        
 Outputs:
     Prints alignment to console.
 
 Example Usage:
-    python msa_clustalw.py -f sequences.fasta -s score_matrix.json -d 100
+    python msa_clustalw.py -f sequences.fasta -c config.txt
 '''
 
 import argparse
@@ -23,6 +21,7 @@ import numpy as np
 import itertools
 import configuration
 import tree_builder
+import heuristic
 
 '''
 a1 and a2 are lists of sequences and t is the traceback matrix.
@@ -73,7 +72,20 @@ Uses slightly modified pairwise alignment that average scores of a1 and a2
 at each recursive step. If gaps are inserted, then they will be inserted
 across the entire column within the alignment.
 '''
-def align(a1,a2,s,d,e):
+def align(a1,a2,config):
+    # weight matrix heuristic
+    if config.weight_m:
+        s = config.scores['BLOSUM62']
+    else:
+        s = config.scores['BLOSUM62']
+    # initial gap penalty heuristic
+    if config.init_gap_penalties:
+        d = heuristic.correctGOP(config.d, s, a1, a2)
+        e = heuristic.correctGEP(config.e, a1, a2)
+    else:
+        d = config.d
+        e = config.e
+    # init lengths
     length_a1 = len(a1[0])
     length_a2 = len(a2[0])
     # init matrices
@@ -151,18 +163,18 @@ def align(a1,a2,s,d,e):
 '''
 Uses postorder traversal to align the nodes
 '''
-def postorder_align(sequences, nodes, root, mapping, s, d, e):
+def postorder_align(sequences, nodes, root, mapping, config):
     def postorder(n):
         lnode,ldist = nodes[n][0]
         rnode,rdist = nodes[n][1]
         if lnode in mapping and rnode in mapping:
-            return align([sequences[lnode]],[sequences[rnode]],s,d,e)
+            return align([sequences[lnode]],[sequences[rnode]],config)
         elif lnode in mapping and rnode not in mapping:
-            return align([sequences[lnode]],postorder(rnode),s,d,e)
+            return align([sequences[lnode]],postorder(rnode),config)
         elif lnode not in mapping and rnode in mapping:
-            return align(postorder(lnode), [sequences[rnode]],s,d,e)
+            return align(postorder(lnode), [sequences[rnode]],config)
         elif lnode not in mapping and rnode not in mapping:
-            return align(postorder(lnode),postorder(rnode),s,d,e)
+            return align(postorder(lnode),postorder(rnode),config)
     aligned = postorder(root)
     return aligned
 
@@ -182,7 +194,7 @@ def sequence_alignment(sequences, config):
     nodes, root = tree_builder.build_tree(D)
     #postorder traversal
     mapping = dict(enumerate(sequences))
-    aligned = postorder_align(sequences, nodes, root, mapping, config.scores['BLOSUM62'], config.d, config.e)
+    aligned = postorder_align(sequences, nodes, root, mapping, config)
     return aligned 
 
 '''
