@@ -143,12 +143,17 @@ def align(a1,a2,a1_ids,a2_ids,lnode,rnode,weights,nodeMap,config):
         for j in range(1,length_a2+1):
             score = 0
             count = 0
-            for x in a1:
-                for y in a2:
+            for k in range(len(a1_ids)):
+                for l in range(len(a2_ids)):
+                    x = a1[k]
+                    y = a2[l]
                     if x[i-1] == '-' or y[j-1] == '-':
                         score += 0
                     else:
-                        score += s[x[i-1]][y[j-1]]
+                        if config.seq_weighting:
+                            scores += s[x[i-1]][y[j-1]] * weights[a1_ids[k]] * weights[a2_ids[l]]
+                        else:
+                            score += s[x[i-1]][y[j-1]]
                     count += 1
             avg_score = score/float(count)
             m_m = m[i-1][j-1] + avg_score
