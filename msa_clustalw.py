@@ -73,6 +73,9 @@ at each recursive step. If gaps are inserted, then they will be inserted
 across the entire column within the alignment.
 '''
 def align(a1,a2,config):
+    # init lengths
+    length_a1 = len(a1[0])
+    length_a2 = len(a2[0])
     # weight matrix heuristic
     if config.weight_m:
         s = config.scores['BLOSUM62']
@@ -85,9 +88,19 @@ def align(a1,a2,config):
     else:
         d = config.d
         e = config.e
-    # init lengths
-    length_a1 = len(a1[0])
-    length_a2 = len(a2[0])
+    # position specific gap penalty heuristic
+    if config.pos_gap_penalties:
+        d_a1, e_a1 = (a1,d,e)
+        d_a1 = (a1,d_a1)
+        d_a2, e_a2 = (a2,d,e)
+        d_a2 = (a,d_a2)
+
+    else:
+        d_a1 = [d] * length_a1
+        d_a2 = [d] * length_a2
+        e_a1 = [e] * length_a1 
+        e_a2 = [e] * length_a2
+
     # init matrices
     m = [[0] * (length_a2+1) for _ in range(length_a1+1)]
     i_x = [[0] * (length_a2+1) for _ in range(length_a1+1)]
@@ -100,16 +113,16 @@ def align(a1,a2,config):
         t.append(temp)    
     # base cases
     for i in range(1,length_a1+1):
-        m[i][0] = m[i-1][0]-d
-        i_x[i][0] = i_x[i-1][0]-e
+        m[i][0] = m[i-1][0]-d_a1[i-1]
+        i_x[i][0] = i_x[i-1][0]-e_a1[i-1]
         i_y[i][0] = -1e10
         t[i][0][0] = ['u', 1]
         t[i][0][1] = ['u', 1]
         t[i][0][2] = ['u', 1]
     for j in range(1,length_a2+1):
-        m[0][j] = m[0][j-1]-d
+        m[0][j] = m[0][j-1]-d_a2[j-1]
         i_x[0][j] = -1e10
-        i_y[0][j] = i_y[0][j-1]-e
+        i_y[0][j] = i_y[0][j-1]-e_a2[j-1]
         t[0][j][0] = ['l', 2]
         t[0][j][1] = ['l', 2]
         t[0][j][2] = ['l', 2]
@@ -136,15 +149,15 @@ def align(a1,a2,config):
                 t[i][j][0] = ['g', 1]
             elif m[i][j] == m_iy:
                 t[i][j][0] = ['g', 2]
-            ix_m = m[i-1][j] - d
-            ix_ix = i_x[i-1][j] - e
+            ix_m = m[i-1][j] - d_a1[i-1]
+            ix_ix = i_x[i-1][j] - e_a1[i-1]
             i_x[i][j] = max(ix_m,ix_ix)
             if i_x[i][j] == ix_m:
                 t[i][j][1] = ['u', 0]
             elif i_x[i][j] == ix_ix:
                 t[i][j][1] = ['u', 1]
-            iy_m = m[i][j-1] - d
-            iy_iy = i_y[i][j-1] - e
+            iy_m = m[i][j-1] - d_a2[j-1]
+            iy_iy = i_y[i][j-1] - e_a2[j-1]
             i_y[i][j] = max(iy_m,iy_iy)
             if i_y[i][j] == iy_m:
                 t[i][j][2] = ['l', 0]

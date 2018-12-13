@@ -5,7 +5,73 @@ Provides helper functions is using heuristics.
 import numpy as np
 
 # sequence weighting
+class Node:
+    def __init__(self, id = None, left = None, right = None, parent = None, lenToParent = None, num_children = None):
+        self.id = id
+        self.left = left 
+        self.right = right
+        self.parent = parent 
+        self.lenToParent = lenToParent
+        self.num_children = num_children 
 
+def create_node_tree(root, nodes, mapping):
+    nodeMap = {}
+    def recurse(n):
+        if n in mapping:
+            return Node(id = n, num_children=1)
+        else:
+            lnode,ldist = nodes[n][0]
+            rnode,rdist = nodes[n][1]
+            left = recurse(lnode)
+            right = recurse(rnode)
+            node = Node(id = n, left, right)
+            left.parent = node 
+            left.lenToParent = ldist
+            right.parent = node
+            right.lenToParent = rdist
+            node.num_children = left.num_children + right.num_children
+            nodeMap[n] = node
+            return node
+    return recurse(root), nodeMap
+
+def get_sequence_weights(mapping,nodeMap):
+    ret = []
+    for node_id in mapping:
+        weight = 0
+        node = nodeMap[node_id]
+        while node.parent != None:
+            weight += node.lenToParent/float(node.num_children)
+            node = node.parent
+        ret.append(weight)
+    return weight
+    
+# weight matrices
+def get_node_distance(nodeMap,n1,n2):
+    n1 = nodeMap[n1]
+    n2 = nodeMap[n2]
+    count1 = 0
+    temp1 = n1
+    temp2 = n2
+    while temp1.parent != None:
+        temp1 = temp1.parent
+        count1 += 1
+    while temp2.parent != None:
+        temp2 = temp2.parent
+        count2 += 1
+    while count1 > count2:
+        n1 = n1.parent 
+        count1 -= 1 
+    while count2 > count1:
+        n2 = n2.parent
+        count2 -= 1
+    dist = 0
+    while n1 != n2:
+        dist += n1.lenToParent
+        dist += n2.lenToParent
+        n1 = n1.parent
+        n2 = n2.parent 
+    return dist
+    
 # initial gap penalties
 def correctGOP(d, s, a1, a2):
     # calculate avg non-diagonal values of score matrix
@@ -92,8 +158,7 @@ def increaseNearGap(a, oldD):
         else:
             newD[pos] = oldD[pos]
     return newD
-    
-# weight matrices
+
 
 # divergent sequences: Assume done by neighbor-joining already. 
 
