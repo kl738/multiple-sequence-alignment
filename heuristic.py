@@ -18,13 +18,13 @@ def create_node_tree(root, nodes, mapping):
     nodeMap = {}
     def recurse(n):
         if n in mapping:
-            return Node(id = n, num_children=1)
+            return Node(n, num_children=1)
         else:
             lnode,ldist = nodes[n][0]
             rnode,rdist = nodes[n][1]
             left = recurse(lnode)
             right = recurse(rnode)
-            node = Node(id = n, left, right)
+            node = Node(n, left, right)
             left.parent = node 
             left.lenToParent = ldist
             right.parent = node
@@ -43,7 +43,7 @@ def get_sequence_weights(mapping,nodeMap):
             weight += node.lenToParent/float(node.num_children)
             node = node.parent
         ret.append(weight)
-    return weight
+    return ret
     
 # weight matrices
 def get_node_distance(nodeMap,n1,n2):
@@ -149,7 +149,7 @@ def increaseNearGap(a, oldD):
                 posWithGap.add(i)
     posWithoutGap = set(range(n)) - posWithGap
     diffs = [-1,1,-2,2,-3,3,-4,4,-5,5,-6,6,-7,7,-8,8]
-    for pos in range(n)
+    for pos in range(n):
         if pos in posWithoutGap:
             for diff in diffs:
                 if pos + diff in posWithGap:

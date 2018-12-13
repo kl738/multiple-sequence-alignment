@@ -72,13 +72,21 @@ Uses slightly modified pairwise alignment that average scores of a1 and a2
 at each recursive step. If gaps are inserted, then they will be inserted
 across the entire column within the alignment.
 '''
-def align(a1,a2,config):
+def align(a1,a2,a1_ids,a2_ids,lnode,rnode,weights,nodeMap,config):
     # init lengths
     length_a1 = len(a1[0])
     length_a2 = len(a2[0])
     # weight matrix heuristic
     if config.weight_m:
-        s = config.scores['BLOSUM62']
+        dist = heuristic.get_node_distance(nodeMap,lnode,rnode)
+        if .80 < dist <= 1:
+            s = config.scores['BLOSUM80']
+        elif .60 < dist <= .80:
+            s = config.scores['BLOSUM62']
+        elif .30 < dist <= .60:
+            s = config.scores['BLOSUM45']
+        else:
+            s = config.scores['BLOSUM30']
     else:
         s = config.scores['BLOSUM62']
     # initial gap penalty heuristic
@@ -90,10 +98,10 @@ def align(a1,a2,config):
         e = config.e
     # position specific gap penalty heuristic
     if config.pos_gap_penalties:
-        d_a1, e_a1 = (a1,d,e)
-        d_a1 = (a1,d_a1)
-        d_a2, e_a2 = (a2,d,e)
-        d_a2 = (a,d_a2)
+        d_a1, e_a1 = heuristic.decreaseOnGap(a1,d,e)
+        d_a1 = heuristic.increaseNearGap(a1,d_a1)
+        d_a2, e_a2 = heuristic.decreaseOnGap(a2,d,e)
+        d_a2 = heuristic.increaseNearGap(a2,d_a2)
 
     else:
         d_a1 = [d] * length_a1
@@ -101,6 +109,10 @@ def align(a1,a2,config):
         e_a1 = [e] * length_a1 
         e_a2 = [e] * length_a2
 
+    # print(d_a1)
+    # print(e_a1)
+    # print(d_a2)
+    # print(e_a2)
     # init matrices
     m = [[0] * (length_a2+1) for _ in range(length_a1+1)]
     i_x = [[0] * (length_a2+1) for _ in range(length_a1+1)]
@@ -171,24 +183,33 @@ def align(a1,a2,config):
     elif max_score == i_y[len(x)][len(y)]:
         start = 2
     aligned = traceback(a1,a2,t,start)
-    return aligned
+    aligned_ids = []
+    for aid in a1_ids:
+        aligned_ids.append(aid)
+    for aid in a2_ids:
+        aligned_ids.append(aid)
+    return aligned, aligned_ids
 
 '''
 Uses postorder traversal to align the nodes
 '''
-def postorder_align(sequences, nodes, root, mapping, config):
+def postorder_align(sequences, nodes, root, mapping, weights, nodeMap, config):
     def postorder(n):
         lnode,ldist = nodes[n][0]
         rnode,rdist = nodes[n][1]
         if lnode in mapping and rnode in mapping:
-            return align([sequences[lnode]],[sequences[rnode]],config)
+            return align([sequences[lnode]],[sequences[rnode]],[lnode],[rnode],lnode,rnode,weights,nodeMap,config)
         elif lnode in mapping and rnode not in mapping:
-            return align([sequences[lnode]],postorder(rnode),config)
+            r_aligned, r_aligned_ids = postorder(rnode)
+            return align([sequences[lnode]],r_aligned,[lnode],r_aligned_ids,lnode,rnode,weights,nodeMap,config)
         elif lnode not in mapping and rnode in mapping:
-            return align(postorder(lnode), [sequences[rnode]],config)
+            l_aligned, l_aligned_ids = postorder(lnode)
+            return align(l_aligned,[sequences[rnode]],l_aligned_ids,[rnode],lnode,rnode,weights,nodeMapconfig)
         elif lnode not in mapping and rnode not in mapping:
-            return align(postorder(lnode),postorder(rnode),config)
-    aligned = postorder(root)
+            l_aligned, l_aligned_ids = postorder(lnode)
+            r_aligned, r_aligned_ids = postorder(rnode)
+            return align(l_aligned,r_aligned,l_aligned_ids,r_aligned_ids,lnode,rnode,weights,nodeMap,config)
+    aligned, aligned_ids = postorder(root)
     return aligned
 
 '''
@@ -205,9 +226,12 @@ def sequence_alignment(sequences, config):
     D = tree_builder.compute_distances(sequences, config.scores['BLOSUM62'], config.d, config.e)
     #compute guide_tree
     nodes, root = tree_builder.build_tree(D)
-    #postorder traversal
     mapping = dict(enumerate(sequences))
-    aligned = postorder_align(sequences, nodes, root, mapping, config)
+    #get info for heuristics
+    tree_root, nodeMap = heuristic.create_node_tree(root,nodes,mapping)
+    sequence_weights = heuristic.get_sequence_weights(mapping,nodeMap)
+    #postorder traversal
+    aligned = postorder_align(sequences,nodes,root,mapping,weights,nodeMap,config)
     return aligned 
 
 '''
